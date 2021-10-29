@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -14,6 +16,7 @@ namespace RestaurantRaterAPI.Controllers
         {
             _context = context;
         }
+        //Create Restaurant
         [HttpPost]
         public async Task<IActionResult> PostRestaurant([FromForm] RestaurantEdit model)
         {
@@ -29,23 +32,64 @@ namespace RestaurantRaterAPI.Controllers
             return Ok();
         }
 
+        //Get list of restaurants
         [HttpGet]
         public async Task<IActionResult> GetRestaurants()
         {
-            var restaurants = await _context.Restaurants.ToListAsync();
-            return Ok(restaurants);
+            var restaurants = await _context.Restaurants.Include(r => r.Ratings).ToListAsync();
+            List<RestaurantListItem> restaurantList = restaurants.Select(r => new RestaurantListItem
+            {
+                Id = r.Id,
+                Name = r.Name,
+                Location = r.Location,
+                AvgRating = r.AvgRating
+            }).ToList();
+            return Ok(restaurantList);
         }
+
+        //Get one restaurant by id
         [HttpGet]
         [Route("{id}")]
         public async Task<IActionResult> GetRestaurantById(int id)
         {
-            var restaurant = await _context.Restaurants.FindAsync(id);
+            var restaurant = await _context.Restaurants.Include(r => r.Ratings).FirstOrDefaultAsync(r => r.Id == id);
             if(restaurant == null)
             {
                 return NotFound();
             }
             return Ok(restaurant);
         }
+
+        //Update a Restaurant
+        [HttpPut]
+        [Route("{id}")]
+        public async Task<IActionResult> UpdateRestaurant([FromRoute] int id, [FromBody] Restaurant model)
+        {
+            if(!ModelState.IsValid) return BadRequest(ModelState);
+            var oldRestaurant = await _context.Restaurants.FindAsync(id);
+            if(oldRestaurant == null)
+            {
+                return NotFound();
+            }
+            try
+            {
+                if(!string.IsNullOrEmpty(model.Name))
+                {
+                    oldRestaurant.Name = model.Name;
+                }
+                if(!string.IsNullOrEmpty(model.Location))
+                {
+                    oldRestaurant.Location = model.Location;
+                }
+            }
+            catch
+            {
+                return BadRequest("Name or Location is null or empty");
+            }
+            await _context.SaveChangesAsync();
+            return Ok();
+        }
+        //Delete Restaurants
         [HttpDelete]
         [Route("{id}")]
         public async Task<IActionResult> DeleteRestaurantById([FromRoute] int id)
